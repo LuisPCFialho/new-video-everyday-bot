@@ -171,7 +171,7 @@ def cmd_resume(args, settings: Settings) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="python -m reels_bot", description="Publicador de Reels @new.video.everyday")
+    parser = argparse.ArgumentParser(prog="python -m reels_bot", description="Publicador de Reels @content_central_official")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("setup", help="configurar tokens do Meta e bucket R2").set_defaults(func=cmd_setup)
     p = sub.add_parser("import", help="criar/espelhar queue/ a partir da pasta-fonte (ou de ZIPs)")

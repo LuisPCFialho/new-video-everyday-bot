@@ -1,4 +1,4 @@
-# Configuração do publicador de Reels (@new.video.everyday).
+# Configuração do publicador de Reels (@content_central_official).
 # Segredos (tokens, chaves) NÃO vão aqui: ficam no .env (local) ou nos
 # GitHub repo secrets (cloud).
 
@@ -20,7 +20,7 @@ covers_subdir = "Covers"
 captions_file = "Descriptions.txt"
 
 [instagram]
-username = "new.video.everyday"
+username = "content_central_official"
 graph_api_version = "v23.0"
 poll_interval_s = 15
 poll_timeout_s = 900

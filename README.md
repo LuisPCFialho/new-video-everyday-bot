@@ -1,4 +1,4 @@
-# Publicador de Reels — @new.video.everyday
+# Publicador de Reels — @content_central_official
 
 Publica **1 reel por noite às 21:00 (Lisboa)** a partir de uma fila, e logo a seguir
 uma **story com os primeiros 15 s** desse reel. Usa só a **API oficial do Instagram**
@@ -76,7 +76,7 @@ O assistente guia-te passo a passo e testa cada coisa antes de a gravar no `.env
      bot renova-o sozinho quando faltarem menos de 10 dias. Se a renovação falhar, a
      execução fica a vermelho e recebes o email do GitHub.
    - O assistente descobre sozinho a Página, o *Page access token* e o **IG_USER_ID** de
-     @new.video.everyday.
+     @content_central_official.
 3. **Bucket R2** (Cloudflare): cria o bucket `new-video-everyday` (**privado**) e uma API
    key "Object Read & Write" só para esse bucket. O assistente testa escrita, URL
    pré-assinado (HTTPS, válido 2 h) e remoção.
