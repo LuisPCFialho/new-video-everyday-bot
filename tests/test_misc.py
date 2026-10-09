@@ -45,7 +45,7 @@ def test_setup_logging_creates_daily_file_and_silences_httpx(tmp_path):
 
 def test_load_settings_from_repo_config():
     s = load_settings()
-    assert s.timezone == "Europe/Lisbon" and s.publish_time == "21:00"
+    assert s.timezone == "Europe/Lisbon" and len(s.windows) == 2 and s.publish_first == (1, 16)
     assert s.story_teaser_seconds == 15 and s.max_consecutive_failures == 2
 
 

@@ -1,45 +1,60 @@
 # Publicador de Reels — @content_central_official
 
-Publica **1 reel por noite às 21:00 (Lisboa)** a partir de uma fila, e logo a seguir
-uma **story com os primeiros 15 s** desse reel. Usa só a **API oficial do Instagram**
-(Graph API, Content Publishing): não há automação de browser nem bibliotecas não oficiais.
+Publica **2 reels por dia, a horas aleatórias** (uma entre as 12:00 e as 15:00 e outra entre
+as 19:00 e as 23:00, hora de Lisboa; as horas mudam todos os dias), e logo a seguir a cada
+reel uma **story com os primeiros 15 s**. No primeiro dia (`start_date`) publica só 1.
+Usa só a **API oficial do Instagram** (Graph API, Content Publishing): não há automação de
+browser nem bibliotecas não oficiais.
 
 ```
-D:\new.video.everyday ──(update, no teu PC)──► bucket Cloudflare R2 ──► GitHub Actions 21:00 ──► Instagram
-   Videos\ Covers\                              (fila + estado)            (PC pode estar desligado)   reel + story
-   Descriptions.txt
+D:\Content Central ──(update, no teu PC)──► bucket Cloudflare R2 ──► GitHub Actions ──► Instagram
+   Videos\ Covers\                           (fila + estado)        (PC pode estar     reel + story
+   Descriptions.txt                                                    desligado)
 ```
 
-- **Nunca publica duplicados**: antes de cada publicação lê todos os reels da conta e
-  marca como "já publicado" o que já lá estiver, incluindo os que publicaste à mão.
+- **Ordem**: primeiro os números de `publish_first` no `config.toml` (agora 01 e 16), depois
+  a numeração normal.
+- **Nunca publica duplicados**: antes de cada publicação lê todas as publicações da conta e
+  marca como "já publicado" o que já lá estiver, incluindo o que publicaste à mão.
 - **Nunca apaga nem edita** publicações existentes, e só publica o que está na fila.
 - **Pausa sozinho** depois de 2 falhas seguidas. O GitHub envia-te um email sempre que
   uma execução falha.
 - A **primeira execução é sempre um ensaio** (dry-run), mesmo que não o peças.
 
+## Horários
+
+Configuram-se no `config.toml`, secção `[schedule]`:
+
+| Campo | Para quê |
+|---|---|
+| `windows` | Janelas (hora de Lisboa); 1 reel por janela, a um minuto aleatório |
+| `start_date` | Primeiro dia: só a última janela (1 vídeo). Antes disso não publica |
+| `slot_seed` | Muda-a para baralhar todas as horas futuras |
+| `min_hours_between_posts` | Segurança: mínimo entre 2 reels (3 h) |
+
+Para ver as horas dos próximos dias:
+`python -c "from datetime import date, timedelta; from reels_bot.config import load_settings; from reels_bot.slots import daily_slots; s = load_settings(); [print(date.today() + timedelta(d), [x.strftime('%H:%M') for x in daily_slots(date.today() + timedelta(d), s)]) for d in range(7)]"`
+
+Se mudares as janelas, as horas do `cron` em `.github/workflows/publish.yml` têm de as
+cobrir (em UTC; Lisboa é UTC+1 no verão e UTC+0 no inverno). O teste
+`tests/test_slots.py` confirma isso: corre `python -m pytest` depois de mudares.
+
 ---
 
 ## Minutos do GitHub Actions
 
-| Situação | Minutos |
-|---|---|
-| Noite com publicação (reel + story) | ~3–5 min (a maior parte é à espera que o Instagram processe o vídeo) |
-| Noite em que ainda não passaram 20 h desde o último reel | ~1 min |
-| Semanas de mudança de hora (14 dias/ano) | +1 min nesses dias (há um disparo extra que sai em segundos) |
-| Fila vazia ou bot em pausa | **0**: o workflow desliga-se sozinho e recebes **1 email** a avisar |
-| Commits/push para o repositório | **0**: o workflow não corre em push |
+O workflow acorda de 30 em 30 min dentro das janelas (22 vezes por dia). Em ~5 s calcula se
+há um slot nessa meia hora; se não houver, acaba logo. Quando há, espera até ao minuto exacto
+e publica (reel + story, ~3–5 min).
 
-Para 16 vídeos são cerca de **60–80 min no total**. Duas opções para não tocares na quota
-dos teus negócios:
+**Isto só é gratuito porque o repositório é público**: em repositórios públicos os runners
+normais do GitHub **não gastam minutos** da quota. **Não o tornes privado** (gastaria
+~700 min/mês). O código não tem segredos: os tokens ficam nos *repo secrets* (encriptados e
+escondidos nos logs) e os vídeos no bucket privado.
 
-1. **Repositório público** (recomendado): em repositórios públicos os runners normais do
-   GitHub **não gastam minutos** da quota. O código não tem segredos: os tokens ficam nos
-   *repo secrets* (encriptados e escondidos nos logs) e os vídeos no bucket privado. Os logs
-   das execuções ficam visíveis (títulos e legendas, que já são públicos no Instagram).
-   Nota: o GitHub desliga agendamentos de repositórios públicos sem actividade durante
-   60 dias e avisa por email antes. Se acontecer, basta reactivar (ver "Problemas").
-2. **Repositório privado na tua conta pessoal**: os minutos saem da quota da tua conta
-   pessoal (2 000 min/mês no plano gratuito), não da quota das organizações das empresas.
+- Fila vazia ou pausa: o workflow desliga-se sozinho e recebes **1 email** a avisar.
+- O GitHub desliga agendamentos de repositórios públicos sem commits durante 60 dias (avisa
+  por email antes). Se acontecer: `gh workflow enable publish.yml`.
 
 ---
 
@@ -90,7 +105,7 @@ python -m reels_bot update      # = import + push-queue
 python -m reels_bot status      # tabela: #, título, estado, quando, permalink
 ```
 
-- O `import` lê `D:\new.video.everyday` (caminho no `config.toml`):
+- O `import` lê `D:\Content Central` (caminho no `config.toml`):
   `Videos\NN-slug.mp4`, `Covers\NN-slug-cover.jpg` e `Descriptions.txt`. Valida cada vídeo
   (3–90 s, 9:16, ≤ 1 GB, H.264 + AAC), cada legenda (≤ 2 200 caracteres, ≤ 30 hashtags) e
   gera `story.mp4` (primeiros 15 s).
@@ -106,7 +121,7 @@ python -m reels_bot publish-next --dry-run
 ```
 
 O ensaio faz tudo menos publicar: detecta os reels que já publicaste à mão, verifica a
-quota e o intervalo de 20 h, valida o próximo item e confirma que o Instagram consegue
+quota e o intervalo mínimo entre reels, valida o próximo item e confirma que o Instagram consegue
 descarregar os ficheiros do bucket. Mostra a legenda que seria publicada.
 **Enquanto não houver um ensaio com sucesso, qualquer publicação é convertida em ensaio.**
 
@@ -120,11 +135,11 @@ gh secret set -f .env
 ```
 
 Depois, em GitHub → **Actions**, confirma que o workflow **publish-reel** está activo.
-A partir daí corre todas as noites às 21:00 de Lisboa (o GitHub pode atrasar 5–30 min).
+A partir daí publica 2 reels por dia, a horas aleatórias dentro das janelas (ver "Horários").
 
 ## 6. Primeira publicação real
 
-Espera pelas 21:00, ou dispara à mão em GitHub → Actions → publish-reel →
+Espera pelo próximo slot, ou dispara à mão em GitHub → Actions → publish-reel →
 **Run workflow**. Também podes publicar a partir do PC com
 `python -m reels_bot publish-next`. Confirma no Instagram e com `status`.
 
@@ -132,7 +147,7 @@ Espera pelas 21:00, ou dispara à mão em GitHub → Actions → publish-reel �
 
 ## Juntar vídeos novos mais tarde
 
-1. Copia `NN-slug.mp4` para `D:\new.video.everyday\Videos` e `NN-slug-cover.jpg` para `Covers`.
+1. Copia `NN-slug.mp4` para `D:\Content Central\Videos` e `NN-slug-cover.jpg` para `Covers`.
 2. Acrescenta o bloco ao `Descriptions.txt`:
    ```
    ========================================
@@ -174,8 +189,8 @@ publicação antes dessa data. Corre `push-queue` depois de editar.
   só reels) e salta o que já lá está. Cada publicação existente só "conta" para um item.
 - **Lock** no bucket: se publicares a partir do PC enquanto o GitHub está a publicar (ou
   vice-versa), a segunda execução não faz nada. Nesse período `skip` e `resume` também esperam.
-- Mínimo **20 h** entre reels (qualquer reel da conta, manual ou do bot). São 20 h e não
-  24 h porque o GitHub atrasa os agendamentos: com 24 h, um atraso fazia perder o dia seguinte.
+- Mínimo **3 h** entre reels (qualquer reel da conta, manual ou do bot), e cada slot
+  aleatório só é usado uma vez, mesmo que a publicação falhe.
 - Respeita a quota da API (`content_publishing_limit`).
 - Erros de rede e 5xx: até 3 tentativas com espera crescente. O `media_publish` **nunca**
   é repetido sem antes confirmar que não foi publicado.
@@ -195,7 +210,7 @@ publicação antes dessa data. Corre `push-queue` depois de editar.
 | "story falhou" | O reel saiu; só a story falhou (não conta para a pausa). Podes publicar a story à mão |
 | "Token inválido / Renovação falhou" | `python -m reels_bot setup` e depois `gh secret set -f .env` |
 | Workflow desactivado (fila vazia ou 60 dias sem actividade) | `gh workflow enable publish.yml` |
-| Quero mudar a hora | `publish_time` no `config.toml` **e** as horas dos `cron` + `PUBLISH_TIME` no workflow |
+| Quero mudar os horários | `windows` no `config.toml`; se saírem das horas do `cron` do workflow, ajusta-as e corre `python -m pytest` (ver "Horários") |
 
 ## Testes
 

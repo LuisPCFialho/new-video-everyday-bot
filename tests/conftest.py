@@ -26,7 +26,8 @@ VALID_PROBE = {"duration_s": 65.0, "width": 1080, "height": 1920, "size_bytes": 
 
 def make_settings(**overrides) -> Settings:
     base = dict(
-        timezone="Europe/Lisbon", publish_time="21:00", min_hours_between_posts=20,
+        timezone="Europe/Lisbon", windows=(("12:00", "15:00"), ("19:00", "23:00")), start_date=None,
+        slot_seed="test", min_hours_between_posts=20, publish_first=(),
         source_dir=Path("."), videos_subdir="Videos", covers_subdir="Covers", captions_file="Descriptions.txt",
         ig_username="new.video.everyday", graph_api_version="v23.0", poll_interval_s=15, poll_timeout_s=60,
         story_teaser_seconds=15, story_poll_timeout_s=60, queue_prefix="queue/", state_key="state/state.json",

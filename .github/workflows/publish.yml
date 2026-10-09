@@ -1,25 +1,21 @@
-# Publica 1 reel (+ story teaser) por noite às 21:00 de Lisboa.
+# Publica 2 reels por dia (cada um seguido da sua story teaser), a horas aleatórias
+# dentro das janelas do config.toml (hora de Lisboa). No 1.º dia (start_date) só 1.
 #
-# Poupança de minutos do GitHub Actions:
-#  - Só um disparo por dia, excepto nas 2 semanas de mudança de hora (14 dias/ano),
-#    em que há dois disparos e o primeiro passo descarta o errado em ~5 s.
-#  - Sem gatilhos de push/PR: commits neste repositório não gastam minutos.
-#  - Quando a fila acaba ou o bot entra em pausa, o workflow desactiva-se sozinho
-#    (0 minutos até o reactivares).
-#  - timeout-minutes limita o pior caso: reel 15 min + story 5 min + verificações.
+# Como funciona:
+#  - O cron dispara de 30 em 30 min só nas horas das janelas (em UTC, cobrindo verão e inverno).
+#  - O passo "gate" calcula (sem instalar nada, ~5 s) se há um slot aleatório nesta meia hora;
+#    se não houver, o job acaba aí. Se houver, o bot espera até ao minuto exacto e publica.
+#  - Repositório público: estes minutos não contam para a quota do GitHub Actions.
+#    (Num repositório privado isto gastaria ~700 min/mês — não o tornes privado.)
+#  - Sem gatilhos de push/PR. Fila vazia ou pausa → o workflow desactiva-se sozinho.
 #
-# Os cron são em UTC. Lisboa = UTC+0 no inverno e UTC+1 no verão.
-# Se mudares publish_time no config.toml, muda também a hora aqui e em PUBLISH_TIME.
+# Janelas actuais: 12:00–15:00 e 19:00–23:00 Lisboa = 11–14 h e 18–22 h UTC no verão,
+# 12–15 h e 19–23 h UTC no inverno. Se mudares as janelas, ajusta as horas do cron.
 name: publish-reel
 
 on:
   schedule:
-    - cron: "0 21 * 1,2,11,12 *"   # inverno: 21:00 UTC = 21:00 Lisboa
-    - cron: "0 21 1-24 3 *"        # março antes da mudança de hora
-    - cron: "0 20 * 4-9 *"         # verão: 20:00 UTC = 21:00 Lisboa
-    - cron: "0 20 1-24 10 *"       # outubro antes da mudança de hora
-    - cron: "0 20 25-31 3,10 *"    # semanas da mudança de hora: os dois horários;
-    - cron: "0 21 25-31 3,10 *"    # o passo "gate" deixa passar só o certo
+    - cron: "13,43 11-15,18-23 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -38,35 +34,18 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    env:
-      PUBLISH_TIME: "21:00"
+    timeout-minutes: 60   # espera até 31 min pelo minuto do slot + reel 15 min + story 5 min
     steps:
-      - name: Gate (hora certa em Lisboa?)
-        id: gate
-        env:
-          SCHEDULE: ${{ github.event.schedule }}
-        run: |
-          if [ -z "$SCHEDULE" ]; then echo "go=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          # Hora UTC a que corresponde PUBLISH_TIME hoje em Lisboa (python3 já vem no runner)
-          want=$(python3 -c "
-          import os
-          from datetime import datetime
-          from zoneinfo import ZoneInfo as Z
-          h, m = map(int, os.environ['PUBLISH_TIME'].split(':'))
-          d = datetime.now(Z('Europe/Lisbon')).replace(hour=h, minute=m, second=0, microsecond=0)
-          print(d.astimezone(Z('UTC')).hour)")
-          got=$(echo "$SCHEDULE" | awk '{print $2}')
-          if [ "$want" = "$got" ]; then
-            echo "go=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "Disparo das ${got}h UTC não corresponde às $PUBLISH_TIME de Lisboa hoje (${want}h UTC). Nada a fazer."
-            echo "go=false" >> "$GITHUB_OUTPUT"
-          fi
-
       # Actions fixadas por SHA (o job tem acesso aos segredos de produção)
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        if: steps.gate.outputs.go == 'true'
+
+      - name: Gate (há slot nesta meia hora?)
+        id: gate
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" != "schedule" ]; then echo "go=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          python3 -m reels_bot.slots
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         if: steps.gate.outputs.go == 'true'
@@ -91,9 +70,11 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
           DRY_RUN: ${{ inputs.dry_run }}
+          EVENT: ${{ github.event_name }}
         run: |
           args=""
-          if [ "$DRY_RUN" = "true" ]; then args="--dry-run"; fi
+          if [ "$EVENT" = "schedule" ]; then args="--scheduled"; fi
+          if [ "$DRY_RUN" = "true" ]; then args="$args --dry-run"; fi
           set +e
           python -m reels_bot publish-next $args
           rc=$?
@@ -117,7 +98,7 @@ jobs:
           RC: ${{ steps.run.outputs.rc }}
         run: |
           case "$RC" in
-            11) echo "::error::Fila vazia: junta vídeos em D:\\new.video.everyday, corre 'update' e 'gh workflow enable publish.yml'" ;;
+            11) echo "::error::Fila vazia: junta vídeos em D:\\Content Central, corre 'update' e 'gh workflow enable publish.yml'" ;;
             10) echo "::error::Bot em PAUSA após falhas seguidas: vê os logs, corrige, corre 'resume' e 'gh workflow enable publish.yml'" ;;
             *)  echo "::error::publish-next terminou com código $RC (ver o passo Publicar)" ;;
           esac

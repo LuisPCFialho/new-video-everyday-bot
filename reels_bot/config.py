@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import tomllib
 from dataclasses import dataclass
+from datetime import date, time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -29,8 +30,11 @@ class ConfigError(RuntimeError):
 @dataclass(frozen=True)
 class Settings:
     timezone: str
-    publish_time: str
+    windows: tuple[tuple[str, str], ...]
+    start_date: date | None
+    slot_seed: str
     min_hours_between_posts: float
+    publish_first: tuple[int, ...]
     source_dir: Path
     videos_subdir: str
     covers_subdir: str
@@ -65,13 +69,20 @@ class Secrets:
 def load_settings(path: Path = CONFIG_PATH) -> Settings:
     try:
         raw = tomllib.loads(path.read_text(encoding="utf-8"))
-        sch, src, ig, st, bk, sf = (
-            raw[k] for k in ("schedule", "source", "instagram", "story", "bucket", "safety")
+        sch, q, src, ig, st, bk, sf = (
+            raw[k] for k in ("schedule", "queue", "source", "instagram", "story", "bucket", "safety")
         )
+        windows = tuple((str(a), str(b)) for a, b in sch["windows"])
+        for a, b in windows:
+            if time.fromisoformat(a) >= time.fromisoformat(b):
+                raise ValueError(f"janela {a}–{b}: o início tem de ser antes do fim")
         return Settings(
             timezone=sch["timezone"],
-            publish_time=sch["publish_time"],
+            windows=windows,
+            start_date=date.fromisoformat(sch["start_date"]) if sch.get("start_date") else None,
+            slot_seed=str(sch["slot_seed"]),
             min_hours_between_posts=float(sch["min_hours_between_posts"]),
+            publish_first=tuple(int(n) for n in q.get("publish_first", [])),
             source_dir=Path(src["dir"]),
             videos_subdir=src["videos_subdir"],
             covers_subdir=src["covers_subdir"],

@@ -21,7 +21,8 @@ import httpx
 from .config import Settings
 from .dedupe import apply_sync, fetch_media, is_match, latest_reel_time, reels_only
 from .graph import GraphClient, GraphError
-from .importer import item_errors
+from .importer import item_errors, slug_sort_key
+from .slots import due_slot
 from .state import State, is_done, item_state, mark_posted, mark_story, record_failure, record_success, with_fields
 from .store import MEDIA_FILES, BucketStore, QueueItem
 
@@ -84,18 +85,27 @@ class Publisher:
     owner: str = field(default_factory=lambda: "github-actions" if os.environ.get("GITHUB_ACTIONS") else "local")
 
     # --- entrada ------------------------------------------------------------
-    def run(self, *, dry_run: bool = False, slug: str | None = None) -> RunResult:
+    def run(self, *, dry_run: bool = False, slug: str | None = None, scheduled: bool = False) -> RunResult:
         state = self.store.load_state()
         if state["paused"]:
             return RunResult("paused", reason=state["pause_reason"] or "pausado")
         if not dry_run and not state["dry_run_ok_at"]:
             log.warning("Ainda não houve nenhum dry-run com sucesso: esta execução é forçada a dry-run.")
             dry_run = True
+        slot = None
+        if scheduled:
+            slot = due_slot(self.now(), self.settings)
+            if slot is None or slot.isoformat() in state["slots_used"]:
+                return RunResult("waiting", reason="nenhum slot por usar nesta meia hora")
+            wait = (slot - self.now()).total_seconds()
+            if wait > 0:
+                log.info("A aguardar pela hora do slot (%s), %.0f min.", slot.strftime("%H:%M"), wait / 60)
+                self.sleep(wait)
         lock = None
         try:
             if not dry_run:
                 lock = self._acquire_lock()
-            return self._run(state, dry_run, slug)
+            return self._run(self.store.load_state(), dry_run, slug, slot)
         except LockedError as exc:
             log.warning("%s — nada feito.", exc)
             return RunResult("waiting", slug, reason=str(exc))
@@ -151,7 +161,7 @@ class Publisher:
         return RunResult("failed", slug, reason=reason)
 
     # --- fluxo --------------------------------------------------------------
-    def _run(self, state: State, dry_run: bool, slug: str | None) -> RunResult:
+    def _run(self, state: State, dry_run: bool, slug: str | None, slot: datetime | None = None) -> RunResult:
         items = self.store.load_items(skip=lambda s: is_done(state, s))
         media = fetch_media(self.graph, self.ig_user_id)
         state, marked = apply_sync(self._recover_in_flight(state, items, media), items, media)
@@ -175,6 +185,9 @@ class Publisher:
         item = self._first_valid(due)
         if dry_run:
             return self._dry_run(state, item)
+        if slot:  # gasto já: mesmo que falhe, este slot não volta a ser tentado
+            state = with_fields(state, slots_used=[*state["slots_used"], slot.isoformat()][-20:])
+            self.store.save_state(state)
 
         log.info("A publicar %s — %s", item.slug, item.title)
         posted = self._publish(state, item)
@@ -192,9 +205,15 @@ class Publisher:
         log.info("Story publicada: %s", story_id)
         return RunResult("published", item.slug, posted.get("permalink"))
 
+    def _priority(self, item: QueueItem) -> tuple[int, tuple[int, str]]:
+        """Primeiro os números de `publish_first` (por essa ordem), depois a numeração."""
+        number = slug_sort_key(item.slug)[0]
+        first = self.settings.publish_first
+        return (first.index(number) if number in first else len(first), slug_sort_key(item.slug))
+
     def _pending(self, state: State, items: list[QueueItem], slug: str | None) -> list[QueueItem]:
         if slug is None:
-            return [i for i in items if not is_done(state, i.slug)]
+            return sorted((i for i in items if not is_done(state, i.slug)), key=self._priority)
         if is_done(state, slug):
             raise UsageError(f"'{slug}' já foi publicado ou saltado")
         chosen = [i for i in items if i.slug == slug]

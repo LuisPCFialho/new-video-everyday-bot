@@ -274,3 +274,49 @@ def test_media_publish_error_then_late_publish_is_detected(publisher, store, gra
     assert len(graph_mock.posts("/media_publish")) == 2  # 1 reel (sem repetir) + 1 story
     assert len([r for r in graph_mock.reels if r["caption"] == CAP1.strip()]) == 1
     assert store.load_state()["items"]["01-lisbon"]["ig_media_id"] == "MC1"
+
+
+# --- agendamento aleatório (2 por dia) ----------------------------------------
+def scheduled_publisher(publisher, settings_overrides, now):
+    from conftest import make_settings
+    publisher.settings = make_settings(**settings_overrides)
+    publisher.now = lambda: now
+    slept = []
+    publisher.sleep = slept.append
+    return slept
+
+
+def test_scheduled_waits_until_slot_then_never_reuses_it(publisher, store, graph_mock):
+    from datetime import date
+
+    from reels_bot.slots import daily_slots
+    from conftest import make_settings
+    add_item(store, "01-lisbon", CAP1)
+    add_item(store, "02-vesuvius", CAP2)
+    armed(store)
+    settings = {"start_date": date(2026, 10, 1), "min_hours_between_posts": 3}
+    slot = daily_slots(date(2026, 10, 9), make_settings(**settings))[1]
+    slept = scheduled_publisher(publisher, settings, slot - timedelta(minutes=20))
+    assert publisher.run(scheduled=True).slug == "01-lisbon"
+    assert slept[0] == 20 * 60
+    assert slot.isoformat() in store.load_state()["slots_used"]
+    assert publisher.run(scheduled=True).outcome == "waiting"  # mesmo slot: não repete
+    assert len(graph_mock.posts("/media_publish")) == 2  # 1 reel + 1 story
+
+
+def test_scheduled_outside_slot_does_nothing(publisher, store, graph_mock):
+    from datetime import date
+    add_item(store, "01-lisbon", CAP1)
+    armed(store)
+    scheduled_publisher(publisher, {"start_date": date(2026, 12, 1)}, NOW)
+    assert publisher.run(scheduled=True).outcome == "waiting"
+    assert graph_mock.calls == []
+
+
+def test_publish_first_order(publisher, store):
+    for slug in ("01-lisbon", "02-vesuvius", "03-meteor", "16-earth"):
+        add_item(store, slug, f"Caption for {slug}")
+    armed(store)
+    scheduled_publisher(publisher, {"publish_first": (1, 16), "min_hours_between_posts": 0}, NOW)
+    order = [publisher.run().slug for _ in range(4)]
+    assert order == ["01-lisbon", "16-earth", "02-vesuvius", "03-meteor"]

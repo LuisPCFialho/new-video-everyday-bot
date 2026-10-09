@@ -4,17 +4,24 @@
 
 [schedule]
 timezone = "Europe/Lisbon"
-# Hora de publicação. Se mudares, actualiza também os "cron" e PUBLISH_TIME
-# em .github/workflows/publish.yml (o README explica como).
-publish_time = "21:00"
-# Intervalo mínimo entre reels (qualquer reel da conta, manual ou do bot).
-# 20 h e não 24 h porque o GitHub Actions atrasa os agendamentos 5-30 min:
-# com 24 h, um atraso num dia fazia saltar o dia seguinte.
-min_hours_between_posts = 20
+# Um reel por janela (hora de Lisboa), a uma hora aleatória que muda todos os dias.
+# Se mudares as janelas, confirma que os "cron" em .github/workflows/publish.yml
+# as cobrem (o README explica como).
+windows = [["12:00", "15:00"], ["19:00", "23:00"]]
+# Primeiro dia: só a última janela (1 vídeo). Antes deste dia não publica.
+start_date = "2026-10-09"
+# Semente das horas aleatórias (mudá-la baralha todas as horas futuras).
+slot_seed = "content_central"
+# Segurança: intervalo mínimo entre reels (qualquer reel da conta, manual ou do bot).
+min_hours_between_posts = 3
+
+[queue]
+# Publicar primeiro estes números, por esta ordem; o resto segue a numeração.
+publish_first = [1, 16]
 
 [source]
 # Pasta onde vais juntando vídeos, capas e legendas.
-dir = "D:/new.video.everyday"
+dir = "D:/Content Central"
 videos_subdir = "Videos"
 covers_subdir = "Covers"
 captions_file = "Descriptions.txt"
@@ -29,7 +36,7 @@ poll_timeout_s = 900
 # Depois de cada reel publica uma story com os primeiros N segundos do vídeo
 # (gerada localmente no `import`; a API limita stories de vídeo a 60 s).
 teaser_seconds = 15
-# Espera máxima pelo processamento da story (curta: o job do GitHub tem 25 min).
+# Espera máxima pelo processamento da story (curta, para caber no timeout do job).
 poll_timeout_s = 300
 
 [bucket]

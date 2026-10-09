@@ -128,7 +128,7 @@ def _publish(args, settings: Settings, slug: str | None) -> int:
         state = record_failure(state, str(exc), settings.max_consecutive_failures)
         store.save_state(state)
         return EXIT_CODES["paused" if state["paused"] else "failed"]
-    result = publisher.run(dry_run=args.dry_run, slug=slug)
+    result = publisher.run(dry_run=args.dry_run, slug=slug, scheduled=getattr(args, "scheduled", False))
     log.info("Resultado: %s | %s | %s", result.outcome, result.slug or "-", result.permalink or result.reason)
     return result.exit_code
 
@@ -185,6 +185,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("status", help="tabela da fila").set_defaults(func=cmd_status)
     p = sub.add_parser("publish-next", help="publicar o próximo da fila")
     p.add_argument("--dry-run", action="store_true", help="validar tudo sem publicar")
+    p.add_argument("--scheduled", action="store_true",
+                   help="só publica se houver um slot aleatório por usar nesta meia hora (usado pelo GitHub)")
     p.set_defaults(func=cmd_publish_next)
     p = sub.add_parser("publish", help="publicar um item específico")
     p.add_argument("slug")

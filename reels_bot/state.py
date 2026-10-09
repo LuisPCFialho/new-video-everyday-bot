@@ -16,6 +16,7 @@ def empty_state() -> State:
         "pause_reason": None,
         "dry_run_ok_at": None,
         "in_flight": None,
+        "slots_used": [],
     }
 
 
