@@ -1,0 +1,13 @@
+[project]
+name = "reels-bot"
+version = "1.0.0"
+description = "Publicador nocturno de Reels via Instagram Graph API"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["reels_bot"]
+omit = ["reels_bot/__main__.py"]

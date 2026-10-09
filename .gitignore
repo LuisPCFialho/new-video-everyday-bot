@@ -1,0 +1,17 @@
+# Segredos — NUNCA fazer commit
+.env
+.env.*
+!.env.example
+
+# Dados locais (vídeos ficam no bucket R2, não no Git)
+queue/
+logs/
+state.json
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/

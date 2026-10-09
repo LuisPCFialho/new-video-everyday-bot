@@ -1,0 +1,45 @@
+# Configuração do publicador de Reels (@new.video.everyday).
+# Segredos (tokens, chaves) NÃO vão aqui: ficam no .env (local) ou nos
+# GitHub repo secrets (cloud).
+
+[schedule]
+timezone = "Europe/Lisbon"
+# Hora de publicação. Se mudares, actualiza também os "cron" e PUBLISH_TIME
+# em .github/workflows/publish.yml (o README explica como).
+publish_time = "21:00"
+# Intervalo mínimo entre reels (qualquer reel da conta, manual ou do bot).
+# 20 h e não 24 h porque o GitHub Actions atrasa os agendamentos 5-30 min:
+# com 24 h, um atraso num dia fazia saltar o dia seguinte.
+min_hours_between_posts = 20
+
+[source]
+# Pasta onde vais juntando vídeos, capas e legendas.
+dir = "D:/new.video.everyday"
+videos_subdir = "Videos"
+covers_subdir = "Covers"
+captions_file = "Descriptions.txt"
+
+[instagram]
+username = "new.video.everyday"
+graph_api_version = "v23.0"
+poll_interval_s = 15
+poll_timeout_s = 900
+
+[story]
+# Depois de cada reel publica uma story com os primeiros N segundos do vídeo
+# (gerada localmente no `import`; a API limita stories de vídeo a 60 s).
+teaser_seconds = 15
+# Espera máxima pelo processamento da story (curta: o job do GitHub tem 25 min).
+poll_timeout_s = 300
+
+[bucket]
+queue_prefix = "queue/"
+state_key = "state/state.json"
+token_key = "state/token.json"
+presign_ttl_s = 7200
+
+[safety]
+max_consecutive_failures = 2
+# Renova o token de utilizador quando faltarem menos de N dias.
+token_refresh_days = 10
+log_keep_days = 30
