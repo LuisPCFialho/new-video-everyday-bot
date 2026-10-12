@@ -17,7 +17,8 @@ min_hours_between_posts = 3
 
 [queue]
 # Publicar primeiro estes números, por esta ordem; o resto segue a numeração.
-publish_first = [1, 16]
+# 01 e 16 primeiro (já publicados); depois todos os 3D, os mais recentes.
+publish_first = [1, 16, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
 
 [source]
 # Pasta onde vais juntando vídeos, capas e legendas.
