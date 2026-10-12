@@ -85,7 +85,8 @@ class Publisher:
     owner: str = field(default_factory=lambda: "github-actions" if os.environ.get("GITHUB_ACTIONS") else "local")
 
     # --- entrada ------------------------------------------------------------
-    def run(self, *, dry_run: bool = False, slug: str | None = None, scheduled: bool = False) -> RunResult:
+    def run(self, *, dry_run: bool = False, slug: str | None = None, scheduled: bool = False,
+            ignore_gap: bool = False) -> RunResult:
         state = self.store.load_state()
         if state["paused"]:
             return RunResult("paused", reason=state["pause_reason"] or "pausado")
@@ -105,7 +106,7 @@ class Publisher:
         try:
             if not dry_run:
                 lock = self._acquire_lock()
-            return self._run(self.store.load_state(), dry_run, slug, slot)
+            return self._run(self.store.load_state(), dry_run, slug, slot, ignore_gap)
         except LockedError as exc:
             log.warning("%s — nada feito.", exc)
             return RunResult("waiting", slug, reason=str(exc))
@@ -161,7 +162,8 @@ class Publisher:
         return RunResult("failed", slug, reason=reason)
 
     # --- fluxo --------------------------------------------------------------
-    def _run(self, state: State, dry_run: bool, slug: str | None, slot: datetime | None = None) -> RunResult:
+    def _run(self, state: State, dry_run: bool, slug: str | None, slot: datetime | None = None,
+             ignore_gap: bool = False) -> RunResult:
         items = self.store.load_items(skip=lambda s: is_done(state, s))
         media = fetch_media(self.graph, self.ig_user_id)
         state, marked = apply_sync(self._recover_in_flight(state, items, media), items, media)
@@ -176,7 +178,7 @@ class Publisher:
         if not due:
             return RunResult("waiting", reason="itens restantes têm scheduled_for no futuro")
 
-        wait_reason = self._wait_reason(reels_only(media))
+        wait_reason = self._wait_reason(reels_only(media), ignore_gap)
         if wait_reason:
             if not dry_run:
                 return RunResult("waiting", reason=wait_reason)
@@ -233,8 +235,8 @@ class Publisher:
             dt = dt.replace(tzinfo=ZoneInfo(self.settings.timezone))
         return self.now() >= dt
 
-    def _wait_reason(self, reels: list[dict]) -> str | None:
-        last = latest_reel_time(reels)
+    def _wait_reason(self, reels: list[dict], ignore_gap: bool = False) -> str | None:
+        last = None if ignore_gap else latest_reel_time(reels)
         min_gap = timedelta(hours=self.settings.min_hours_between_posts)
         if last and self.now() - last < min_gap:
             hours = (self.now() - last).total_seconds() / 3600

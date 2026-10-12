@@ -320,3 +320,15 @@ def test_publish_first_order(publisher, store):
     scheduled_publisher(publisher, {"publish_first": (1, 16), "min_hours_between_posts": 0}, NOW)
     order = [publisher.run().slug for _ in range(4)]
     assert order == ["01-lisbon", "16-earth", "02-vesuvius", "03-meteor"]
+
+
+def test_ignore_gap_publishes_despite_recent_reel(publisher, store, graph_mock):
+    add_item(store, "01-lisbon", CAP1)
+    armed(store)
+    graph_mock.reels = [{"id": "X", "caption": "outro", "media_product_type": "REELS",
+                         "timestamp": ig_time(NOW - timedelta(minutes=10))}]
+    assert publisher.run().outcome == "waiting"
+    graph_mock.quota = (100, 100)
+    assert publisher.run(ignore_gap=True).outcome == "waiting"  # a quota continua a valer
+    graph_mock.quota = (0, 100)
+    assert publisher.run(ignore_gap=True).outcome == "published"
