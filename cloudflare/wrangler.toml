@@ -1,0 +1,16 @@
+# Worker "reels-trigger": dispara o workflow publish.yml no GitHub (ver trigger-worker.js).
+# Publicar alterações:  npx wrangler@4 deploy   (nesta pasta)
+# O secret GH_TOKEN é definido à parte e não é tocado pelo deploy:  npx wrangler@4 secret put GH_TOKEN
+name = "reels-trigger"
+main = "trigger-worker.js"
+compatibility_date = "2025-09-01"
+account_id = "3f63351d5dfe269133bf031f991b9dec"
+workers_dev = true
+preview_urls = false
+
+[observability]
+enabled = true
+
+[triggers]
+# UTC, igual ao cron do workflow (cobre as janelas 12–15 h e 19–23 h de Lisboa)
+crons = ["13,43 11-15,18-23 * * *"]
